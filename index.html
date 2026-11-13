@@ -244,7 +244,7 @@
     </div>
 
     <section class="hero">
-      <div class="eyebrow" lang="am">የየሁሉ የፋይናንስ ኢኮሲስተም የ2019 በጀት ዓመት 1ኛ ሩብ ዓመት</div>
+      <div class="eyebrow" lang="am">ከኅዳር 4 እስከ 6 ቀን 2019 &nbsp;·&nbsp; ኃይሌ ግራንድ ሆቴል</div>
       <h1 lang="am">የሁሉ ቤተሰብ የአመራር እና ማናጅመንት <span class="nb">ወርክሾፕ 4</span></h1>
     </section>
 
@@ -289,7 +289,7 @@
   var panelL = document.getElementById('panelL'), panelR = document.getElementById('panelR'), SPEED = 34; // px per second
   var NS = 'http://www.w3.org/2000/svg';
 
-  function buildPanel(panel, dir, phase) {
+  function buildPanel(panel, dir, phase, alignRight) {
     var pw = panel.clientWidth, ph = panel.clientHeight || window.innerHeight;
     if (!pw) return;
     var s = pw / VW, th = P * s, rows = Math.ceil(ph / th) + 2;
@@ -297,7 +297,8 @@
     var strip = document.createElement('div'); strip.className = 'strip';
     var svg = document.createElementNS(NS, 'svg');
     var vh = (rows + 1) * P;
-    svg.setAttribute('viewBox', '0 ' + (Y0 - P) + ' ' + VW + ' ' + vh);
+    // the unit's spacing (GAP) sits on the inner side, so each pattern touches its screen edge
+    svg.setAttribute('viewBox', (alignRight ? -GAP : 0) + ' ' + (Y0 - P) + ' ' + VW + ' ' + vh);
     svg.setAttribute('width', pw); svg.setAttribute('height', vh * s);
     svg.setAttribute('fill', 'currentColor');
     for (var k = -2; k <= rows + 1; k++) {
@@ -311,7 +312,7 @@
     svg.style.animationDelay = (-phase * (th / SPEED)) + 's';
     strip.appendChild(svg); panel.appendChild(strip);
   }
-  function buildStrips() { buildPanel(panelL, 'up', 0); buildPanel(panelR, 'down', 0.5); }
+  function buildStrips() { buildPanel(panelL, 'up', 0); buildPanel(panelR, 'down', 0.5, true); }
   var rz; window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(buildStrips, 150); });
   buildStrips();
 
