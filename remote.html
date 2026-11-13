@@ -68,6 +68,10 @@
       <input type="number" id="mins" min="1" max="999" inputmode="numeric" placeholder="Custom">
       <button id="set">Set</button>
     </div>
+    <h2 style="margin-top:1.5rem">Title above the timer</h2>
+    <input type="text" id="cap" maxlength="80" placeholder="Speaker or session name" autocomplete="off" style="text-align:left;border-radius:14px">
+    <div class="row" style="margin-top:.6rem"><button id="capSet">Show</button><button id="capClear">Clear</button></div>
+    <div class="room" id="capNow" style="margin-top:.6rem"></div>
   </section>
 
   <div class="room" id="roomText"></div>
@@ -85,8 +89,8 @@
   function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; }
 
   // Keep in sync with reduce() in api/state.js
-  function reduce(s, action, t, minutes) {
-    var n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, rev: (s.rev || 0) + 1 };
+  function reduce(s, action, t, minutes, title) {
+    var n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, caption: s.caption, rev: (s.rev || 0) + 1 };
     var expired = s.running && t >= s.endAt;
     if (action === 'start') {
       if (s.running && !expired) return s;
@@ -98,16 +102,18 @@
     } else if (action === 'reset' || action === 'set') {
       if (action === 'set') n.total = Math.max(1, Math.min(999, parseInt(minutes, 10) || 10)) * 60;
       n.remaining = n.total; n.running = false; n.endAt = 0;
+    } else if (action === 'title') {
+      n.caption = String(title == null ? '' : title).slice(0, 80);
     } else return s;
     return n;
   }
   function api() { return '/api/state?room=' + encodeURIComponent(room); }
   function take(d) { if (d && d.state) { offset = d.now - Date.now(); S = d.state; linked = true; } else linked = false; }
-  function send(action, minutes) {
-    S = reduce(S, action, now(), minutes);                   // apply instantly, then confirm with the server
+  function send(action, value) {                             // value: minutes for 'set', text for 'title'
+    S = reduce(S, action, now(), value, value);                   // apply instantly, then confirm with the server
     if (!online || !room) return;
     busy++;
-    fetch(api(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, minutes: minutes }) })
+    fetch(api(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, minutes: value, title: value }) })
       .then(function (r) { return r.json(); }).then(take)
       .catch(function () { linked = false; })
       .then(function () { busy--; });
@@ -140,12 +146,17 @@
     $('statusText').textContent = linked ? 'Connected' : 'Offline';
     var m = S.total / 60, bs = $('presets').children;
     for (var i = 0; i < bs.length; i++) bs[i].className = (+bs[i].getAttribute('data-m') === m ? 'on' : '');
+    $('capNow').textContent = S.caption ? 'On screen: ' + S.caption : 'No title on screen';
     requestAnimationFrame(ui);
   }
   $('start').onclick = function () { send(S.running && left() > 0 ? 'pause' : 'start'); };
   $('reset').onclick = function () { send('reset'); };
   $('presets').onclick = function (e) { var m = e.target.getAttribute('data-m'); if (m) send('set', +m); };
   $('set').onclick = function () { var m = parseInt($('mins').value, 10); if (m > 0) { send('set', m); $('mins').value = ''; $('mins').blur(); } };
+
+  $('capSet').onclick = function () { send('title', $('cap').value.trim()); $('cap').blur(); };
+  $('cap').onkeydown = function (e) { if (e.key === 'Enter') $('capSet').click(); };
+  $('capClear').onclick = function () { $('cap').value = ''; send('title', ''); };
 
   setInterval(poll, 1000); poll(); ui();
 })();

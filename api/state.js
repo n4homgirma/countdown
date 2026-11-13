@@ -15,8 +15,8 @@ async function redis(cmd) {
 }
 
 // Keep in sync with reduce() in index.html and remote.html
-function reduce(s, action, now, minutes) {
-  let n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, rev: (s.rev || 0) + 1 };
+function reduce(s, action, now, minutes, title) {
+  let n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, caption: s.caption, rev: (s.rev || 0) + 1 };
   const expired = s.running && now >= s.endAt;
   if (action === 'start') {
     if (s.running && !expired) return s;
@@ -28,6 +28,8 @@ function reduce(s, action, now, minutes) {
   } else if (action === 'reset' || action === 'set') {
     if (action === 'set') n.total = Math.max(1, Math.min(999, parseInt(minutes, 10) || 10)) * 60;
     n.remaining = n.total; n.running = false; n.endAt = 0;
+  } else if (action === 'title') {
+    n.caption = String(title == null ? '' : title).slice(0, 80);
   } else return s;
   return n;
 }
@@ -43,7 +45,7 @@ module.exports = async (req, res) => {
     let s = raw ? JSON.parse(raw) : { total: 600, remaining: 600, running: false, endAt: 0, rev: 0 };
     if (req.method === 'POST') {
       const b = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const n = reduce(s, b.action, now, b.minutes);
+      const n = reduce(s, b.action, now, b.minutes, b.title);
       if (n !== s) { s = n; await redis(['SET', key, JSON.stringify(s), 'EX', 172800]); }
     }
     res.status(200).json({ state: s, now: now });

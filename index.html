@@ -2644,8 +2644,8 @@ var qrcode = function() {
   function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; }
 
   // Keep in sync with reduce() in api/state.js
-  function reduce(s, action, t, minutes) {
-    var n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, rev: (s.rev || 0) + 1 };
+  function reduce(s, action, t, minutes, title) {
+    var n = { total: s.total, remaining: s.remaining, running: s.running, endAt: s.endAt, caption: s.caption, rev: (s.rev || 0) + 1 };
     var expired = s.running && t >= s.endAt;
     if (action === 'start') {
       if (s.running && !expired) return s;
@@ -2657,16 +2657,18 @@ var qrcode = function() {
     } else if (action === 'reset' || action === 'set') {
       if (action === 'set') n.total = Math.max(1, Math.min(999, parseInt(minutes, 10) || 10)) * 60;
       n.remaining = n.total; n.running = false; n.endAt = 0;
+    } else if (action === 'title') {
+      n.caption = String(title == null ? '' : title).slice(0, 80);
     } else return s;
     return n;
   }
   function api() { return '/api/state?room=' + encodeURIComponent(room); }
   function take(d) { if (d && d.state) { offset = d.now - Date.now(); S = d.state; linked = true; } else linked = false; }
-  function send(action, minutes) {
-    S = reduce(S, action, now(), minutes);                   // apply instantly, then confirm with the server
+  function send(action, value) {                             // value: minutes for 'set', text for 'title'
+    S = reduce(S, action, now(), value, value);                   // apply instantly, then confirm with the server
     if (!online || !room) return;
     busy++;
-    fetch(api(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, minutes: minutes }) })
+    fetch(api(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: action, minutes: value, title: value }) })
       .then(function (r) { return r.json(); }).then(take)
       .catch(function () { linked = false; })
       .then(function () { busy--; });
@@ -2682,7 +2684,7 @@ var qrcode = function() {
   var timeEl = document.getElementById('time'), prog = document.getElementById('prog'),
       ring = document.getElementById('ring'), C = 2 * Math.PI * 47,
       startBtn = document.getElementById('start'), minsIn = document.getElementById('mins'),
-      audio, wasDone = null, wasActive = null, last = '';
+      audio, wasDone = null, wasActive = null, last = '', capPushed = false, capT;
 
   // Room code: from the URL, else remembered, else new. The phone remote joins the same room.
   if (!room) { try { room = localStorage.getItem('yc-room') || ''; } catch (e) {} }
@@ -2735,6 +2737,9 @@ var qrcode = function() {
     }
     startBtn.textContent = active ? 'Pause' : (!done && S.remaining < S.total ? 'Resume' : 'Start');
     if (document.activeElement !== minsIn) minsIn.value = Math.round(S.total / 60);
+    if (linked && typeof S.caption === 'string') {             // title set from the phone (or another screen)
+      if (S.caption !== capIn.value && document.activeElement !== capIn) setCaption(S.caption);
+    } else if (linked && capIn.value && !capPushed) { capPushed = true; send('title', capIn.value); }
     requestAnimationFrame(frame);
   }
   document.addEventListener('click', unlock);       // browsers only allow sound after a click on this page
@@ -2763,10 +2768,14 @@ var qrcode = function() {
     capEl.classList.toggle('long', t.trim().length > 22);
     try { localStorage.setItem('yehulu-caption', t); } catch (e) {}
   }
-  capIn.oninput = function () { setCaption(capIn.value); };
+  capIn.oninput = function () {      // update here at once, share with the phone shortly after
+    setCaption(capIn.value); clearTimeout(capT); capT = setTimeout(function () { send('title', capIn.value); }, 400);
+  };
+  capIn.onchange = function () { clearTimeout(capT); send('title', capIn.value); };
   var q = null; try { q = new URLSearchParams(location.search).get('title'); } catch (e) {}
   var saved = ''; try { saved = localStorage.getItem('yehulu-caption') || ''; } catch (e) {}
   setCaption(q !== null ? q : saved);
+  if (q !== null) send('title', q);
   document.getElementById('full').onclick = function () {
     try { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(function () {}); } catch (e) {}
   };
